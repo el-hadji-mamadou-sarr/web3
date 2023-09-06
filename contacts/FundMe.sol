@@ -5,9 +5,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-    contract FundMe{
+import "./PriceConverter.sol";
+
+contract FundMe{
+
+    using PriceConverter for uint256;
     uint256 public minimumUsd = 50 * 1e18;
+    address [] funders;
+    mapping (address =>uint256) addressToAmountFunded;
+    address owner;
+
+    // the constructor is the function wich is called when the contract is beaing created
+    //so we can at the creation set the owner of the contract to the one publishing it
+
+    constructor (){
+        owner = msg.sender;
+    }
+
     function fund() public payable{
         //set minimum fund
         //require is the constraint
@@ -15,35 +29,34 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
         //vrf random
         //keepers event to triggers
         //chainlink api to get api
-        //1eth = 1e18 wei
-        require(getConversionRate(msg.value) >= minimumUsd, "not enough"); 
+        //1eth = 1e18 wei   
+        require(msg.value.getConversionRate() >= minimumUsd, "not enough");
+        funders.push(msg.sender);
+        addressToAmountFunded[msg.sender] =  msg.value;
     }
 
-    function getPrice() public view returns(uint256){
-        // ABI
-        //address ether data feeds 0x694AA1769357215DE4FAC081bf1f309aDC325306
-        AggregatorV3Interface pricefeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+    function withdraw()  public onlyOwner{
+      
+        //reset
+        for(uint256 index; index < funders.length; index++){
+            address funder = funders[index];
+            addressToAmountFunded[funder] = 0;
+        }
 
-          (
-            /* uint80 roundID */,
-            int256 price,
-            /*uint startedAt*/,
-            /*uint timeStamp*/,
-            /*uint80 answeredInRound*/
-        ) = pricefeed.latestRoundData();
- 
-        //so the return here give the price in 8 decimal place means priceUsd*e8
-        //so we can leave it like that or we can convert it to 18 decimal place because 1eth = 1e18 wei
-        //so to convert it we just have to multiply it by 1e10
-        return uint256(price * 1e10) ;
+        funders = new address[](0);
+
+        //withdraw
+        (bool success,) = payable(msg.sender).call{value: address(this).balance}("");
+        require(success, "failed to withdraw"); 
+        
     }
-    function getConversionRate(uint256 ethAmount) public view returns (uint256){
-        uint256 ethPrice = getPrice();
-        //so ethAmount is like *1e18 cause 1eth = 1e18 wei 
-        uint256 ethAmountInUsd = (ethPrice * ethAmount) /1e18;
 
-        // so the amount in usd is * by 1e18
-        return ethAmountInUsd;
+    // a modifier is a keyword we can create and put it at the head of the function
+    // to tell that when we call the function do what is in the modifier first and then do the rest
+    // in the exemple we can use the modifier to tell that only the owner of the contract can call the function
+    modifier onlyOwner{
+        require(msg.sender == owner, "sender is not owner");
+        _;
     }
 
 }
