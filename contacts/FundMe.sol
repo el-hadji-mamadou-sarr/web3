@@ -10,16 +10,20 @@ import "./PriceConverter.sol";
 contract FundMe{
 
     using PriceConverter for uint256;
-    uint256 public minimumUsd = 50 * 1e18;
+    // using constant keyword can make us save gas
+    uint256 public constant MINIMUM_USD = 50 * 1e18;
     address [] funders;
     mapping (address =>uint256) addressToAmountFunded;
-    address owner;
+
+    // as constant immutable is only set 1 time and can't be change
+    // its also gas efficient
+    address public immutable i_owner;
 
     // the constructor is the function wich is called when the contract is beaing created
     //so we can at the creation set the owner of the contract to the one publishing it
 
     constructor (){
-        owner = msg.sender;
+        i_owner = msg.sender;
     }
 
     function fund() public payable{
@@ -30,7 +34,7 @@ contract FundMe{
         //keepers event to triggers
         //chainlink api to get api
         //1eth = 1e18 wei   
-        require(msg.value.getConversionRate() >= minimumUsd, "not enough");
+        require(msg.value.getConversionRate() >= MINIMUM_USD, "not enough");
         funders.push(msg.sender);
         addressToAmountFunded[msg.sender] =  msg.value;
     }
@@ -55,8 +59,19 @@ contract FundMe{
     // to tell that when we call the function do what is in the modifier first and then do the rest
     // in the exemple we can use the modifier to tell that only the owner of the contract can call the function
     modifier onlyOwner{
-        require(msg.sender == owner, "sender is not owner");
+        require(msg.sender == i_owner, "sender is not owner");
         _;
     }
+
+    // if someone send ether without specifying the fund method
+    receive() external payable {
+        fund();
+    }
+
+    // if someone send ether with a function that do not exist
+    fallback() external payable{
+        fund();
+    }
+
 
 }
